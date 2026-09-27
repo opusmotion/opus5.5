@@ -16,7 +16,9 @@ T0, T1 = bt(7), bt(8) + 0.4
 
 XL = 300.0
 PXM = 17.6  # px per minute → 75 min = 1320 px
-SOL_Y, AST_Y = 640.0, 470.0
+SOL_Y, AST_Y = 660.0, 470.0
+NUM_KEY, NUM_SIZE = "dlight", 52.0
+LAB = 26.0
 
 MOVE0 = bt(7, 0.25)
 TICKS0, TICKS1 = bt(7, 0.55), bt(7, 1.15)
@@ -48,6 +50,13 @@ def minutes(t):
     return int(round(75 - 35 * E.reveal(E.seg(t, COMP0, COMP1))))
 
 
+def _minutes_label(c, m, x_end, y, col, a, unit_col):
+    """Large tabular number + small unit, right-aligned to the line end."""
+    uw = typo.width(" min", "reg", 22)
+    typo.draw(c, " min", x_end, y - 16, "reg", 22, unit_col, a, align="right")
+    typo.draw(c, f"{m}", x_end - uw, y - 14, NUM_KEY, NUM_SIZE, col, a, align="right", tnum=True)
+
+
 def draw(c, t):
     out = E.smooth(E.seg(t, OUT0, OUT0 + 0.3))
     x0, x1, y = sol_line(t)
@@ -56,7 +65,7 @@ def draw(c, t):
     ghost = E.smooth(E.seg(t, SPLIT, SPLIT + 0.4))
     solc = P.mix(P.INK, P.GRAY, ghost)
     if t < OUT0:
-        gfx.line(c, x0, y, x1, y, gfx.stroke(solc, 1.0 * (1 - out), 1.6))
+        gfx.line(c, x0, y, x1, y, gfx.stroke(solc, 1.0 * (1 - out), 1.8))
     # minute ticks
     ticks = gfx.stroke(P.GRAY, 0.9 * la, 1.0)
     tp = skia.Path()
@@ -70,9 +79,9 @@ def draw(c, t):
         tp.lineTo(xm, y + 4 + h)
     c.drawPath(tp, ticks)
     lab = E.smooth(E.seg(t, LAB0, LAB0 + 0.25)) * la
-    typo.draw(c, "GPT-5.6 Sol", XL, SOL_Y - 22, "reg", 22, P.SOFT, lab)
-    typo.draw(c, "65.7%", XL + typo.width("GPT-5.6 Sol", "reg", 22) + 18, SOL_Y - 22, "reg", 22, P.GRAY, lab, tnum=True)
-    typo.draw(c, "75 min", XL + 75 * PXM, SOL_Y - 22, "reg", 22, P.SOFT, lab, align="right", tnum=True)
+    typo.draw(c, "GPT-5.6 Sol", XL, SOL_Y - 20, "reg", LAB, P.SOFT, lab)
+    typo.draw(c, "65.7%", XL + typo.width("GPT-5.6 Sol", "reg", LAB) + 20, SOL_Y - 20, "reg", LAB, P.GRAY, lab, tnum=True)
+    _minutes_label(c, 75, XL + 75 * PXM, SOL_Y, P.SOFT, lab, P.GRAY)
     typo.draw(c, "OSWorld 2.0", XL, 330, "med", 22, P.SOFT, lab, tracking=0.02)
     # Astra — same work, less time
     if t >= SPLIT:
@@ -80,7 +89,7 @@ def draw(c, t):
         sc = astra_scale(t)
         xe = XL + 75 * PXM * sc
         if t < OUT0:
-            gfx.line(c, XL, ya, xe, ya, gfx.stroke(P.INK, 1.0 * (1 - out), 1.6))
+            gfx.line(c, XL, ya, xe, ya, gfx.stroke(P.INK, 1.0 * (1 - out), 1.8))
         tp = skia.Path()
         for m in range(76):
             xm = XL + m * PXM * astra_scale(t, 75 - m)
@@ -89,9 +98,9 @@ def draw(c, t):
             tp.lineTo(xm, ya + 4 + h)
         c.drawPath(tp, gfx.stroke(P.SOFT, 0.95 * la, 1.0))
         al = E.smooth(E.seg(t, SPLIT + 0.1, SPLIT + 0.35)) * la
-        typo.draw(c, "GPT-6 Astra", XL, ya - 22, "reg", 22, P.INK, al)
-        typo.draw(c, "72.6%", XL + typo.width("GPT-6 Astra", "reg", 22) + 18, ya - 22, "reg", 22, P.SOFT, al, tnum=True)
-        typo.draw(c, f"{minutes(t)} min", xe, ya - 22, "reg", 22, P.INK, al, align="right", tnum=True)
+        typo.draw(c, "GPT-6 Astra", XL, ya - 20, "reg", LAB, P.INK, al)
+        typo.draw(c, "72.6%", XL + typo.width("GPT-6 Astra", "reg", LAB) + 20, ya - 20, "reg", LAB, P.SOFT, al, tnum=True)
+        _minutes_label(c, minutes(t), xe, ya, P.INK, al, P.SOFT)
         # the saved time
         dd = E.smooth(E.seg(t, DIFF, DIFF + 0.25)) * la
         if dd > 0:

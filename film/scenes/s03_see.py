@@ -16,8 +16,10 @@ from ..timeline import bt
 T0, T1 = bt(2), bt(3) + 0.02
 
 FW, TOP, BOT = 1460.0, -450.0, 450.0
+# plane-local → world: the top edge of the workspace is scene 02's horizontal axis (world y=0)
+OFF = np.array([-FW / 2, -TOP, 0.0])
 COLS = [(90.0, 470.0), (540.0, 920.0), (990.0, 1370.0)]
-LINE0, PITCH, BAR_H = -372.0, 22.0, 5.0
+LINE0, PITCH, BAR_H = -372.0, 22.0, 3.4
 NLINES = 34
 
 EDGE0, EDGE1 = bt(2, 0.0), bt(2, 0.7)
@@ -93,15 +95,15 @@ TARGETS = [  # (time of arrival, rect x0,y0,x1,y1, bar indices selected)
 
 # camera keyframes: (time, position, target)
 _K = [
-    (bt(2, 0.0), (0.0, 0.0, -1650.0), (0.0, 0.0, 0.0)),
+    (bt(2, 0.0), (0.0, 0.0, -1650.0) - OFF, (0.0, 0.0, 0.0) - OFF),
     (bt(2, 0.75), (FW / 2, 0.0, -1740.0), (FW / 2, 0.0, 0.0)),
-    (bt(2, 1.55), (-240.0, -30.0, -640.0), (520.0, 0.0, 0.0)),
-    (bt(2, 2.45), (360.0, -10.0, -560.0), (1000.0, 40.0, 0.0)),
+    (bt(2, 1.55), (-330.0, -40.0, -900.0), (560.0, 0.0, 0.0)),
+    (bt(2, 2.45), (300.0, -20.0, -780.0), (1000.0, 40.0, 0.0)),
     (bt(3, 0.0), (BCX, BCY, -760.0), (BCX, BCY, 0.0)),
 ]
 _kt = np.array([k[0] for k in _K])
-_kp = PchipInterpolator(_kt, np.array([k[1] for k in _K]), axis=0)
-_kg = PchipInterpolator(_kt, np.array([k[2] for k in _K]), axis=0)
+_kp = PchipInterpolator(_kt, np.array([np.asarray(k[1], float) + OFF for k in _K]), axis=0)
+_kg = PchipInterpolator(_kt, np.array([np.asarray(k[2], float) + OFF for k in _K]), axis=0)
 
 
 def camera(t):
@@ -110,7 +112,7 @@ def camera(t):
 
 
 def _plane(cam):
-    return cam.plane_matrix((0, 0, 0), (1, 0, 0), (0, 1, 0))
+    return cam.plane_matrix(OFF, (1, 0, 0), (0, 1, 0))
 
 
 def focus_rect(t):
@@ -141,7 +143,7 @@ def block_screen(t=None):
     out = []
     for b in BLOCK:
         y = bar_y(b[1])
-        pts, _ = cam.project(np.array([[b[2], y - BAR_H / 2, 0], [b[3], y + BAR_H / 2, 0]], float))
+        pts, _ = cam.project(np.array([[b[2], y - BAR_H / 2, 0], [b[3], y + BAR_H / 2, 0]], float) + OFF)
         out.append((pts[0][0], pts[0][1], pts[1][0], pts[1][1]))
     return out
 
@@ -156,15 +158,19 @@ def draw(c, t):
     c.concat(H)
     fa = 1.0 - out
     edge = gfx.stroke(P.SOFT, 0.85 * fa, 1.6)
-    x_end = FW * ue
-    c.drawLine(0, TOP, float(x_end), TOP, edge)
-    c.drawLine(0, BOT, float(x_end), BOT, edge)
-    c.drawLine(0, TOP, 0, BOT, gfx.stroke(P.mix(P.INK, P.SOFT, E.seg(t, T0, EDGE1)), fa, 1.6))
-    ur = E.traverse(E.seg(t, EDGE1 - 0.12, EDGE1 + 0.1))
-    if ur > 0:
-        mid = (TOP + BOT) / 2
-        c.drawLine(FW, TOP, FW, float(TOP + (mid - TOP) * ur), edge)
-        c.drawLine(FW, BOT, FW, float(BOT - (BOT - mid) * ur), edge)
+    ux = E.traverse(E.seg(t, EDGE0, EDGE0 + 0.22))
+    x_in = FW / 2 - 560.0
+    xa, xb = x_in * (1 - ux), FW - x_in * (1 - ux)
+    c.drawLine(float(xa), TOP, float(xb), TOP, gfx.stroke(P.mix(P.INK, P.SOFT, E.seg(t, T0, EDGE1)), fa, 1.6))
+    us = E.traverse(E.seg(t, EDGE0 + 0.15, EDGE1 - 0.1))
+    if us > 0:
+        yb = TOP + (BOT - TOP) * us
+        c.drawLine(0, TOP, 0, float(yb), edge)
+        c.drawLine(FW, TOP, FW, float(yb), edge)
+    ub = E.traverse(E.seg(t, EDGE1 - 0.18, EDGE1 + 0.08))
+    if ub > 0:
+        c.drawLine(0, BOT, float(FW / 2 * ub), BOT, edge)
+        c.drawLine(FW, BOT, float(FW - FW / 2 * ub), BOT, edge)
     # information: bars stream in, fog with depth
     sel = selected(t)
     for i, (ci, li, a, b) in enumerate(BARS):
@@ -173,14 +179,15 @@ def draw(c, t):
         if g <= 0:
             continue
         y = bar_y(li)
-        wc = cam.to_cam(np.array([(a + b) / 2, y, 0.0]))
-        fog = float(np.clip(1.15 - (wc[2] - 500) / 2400, 0.25, 1.0))
+        wc = cam.to_cam(np.array([(a + b) / 2, y, 0.0]) + OFF)
+        fog = float(np.clip(1.2 - (wc[2] - 450) / 1500, 0.08, 1.0))
         s = sel.get(i, 0.0)
         inblock = i in _bl
         keep = 1.0 if inblock else fa
         col = P.mix(P.GRAY, P.INK, s)
-        c.drawRect(skia.Rect.MakeLTRB(a, y - BAR_H / 2, a + (b - a) * g, y + BAR_H / 2),
-                   gfx.fill(col, (0.8 + 0.2 * s) * fog * keep))
+        hh = BAR_H / 2 * (1 + 0.45 * s)
+        c.drawRect(skia.Rect.MakeLTRB(a, y - hh, a + (b - a) * g, y + hh),
+                   gfx.fill(col, (0.62 + 0.38 * s) * fog * keep))
     # figure in column 3
     fg = E.reveal(E.seg(t, FILL0 + 0.2, FILL0 + 0.45)) * fa
     if fg > 0:
@@ -196,8 +203,8 @@ def draw(c, t):
     fa2 = E.smooth(E.seg(t, TARGETS[0][0] - 0.3, TARGETS[0][0] - 0.15)) * (1 - E.smooth(E.seg(t, bt(2, 3.3), bt(3))))
     if fa2 > 0:
         x0, y0, x1, y1 = focus_rect(t)
-        L = min(14.0, (x1 - x0) / 3, (y1 - y0) / 2)
-        p = gfx.stroke(P.INK, fa2, 2.0, cap="square")
+        L = min(18.0, (x1 - x0) / 3, (y1 - y0) / 2)
+        p = gfx.stroke(P.INK, fa2, 2.4, cap="square")
         for (cx, cy, sx, sy) in ((x0, y0, 1, 1), (x1, y0, -1, 1), (x1, y1, -1, -1), (x0, y1, 1, -1)):
             path = skia.Path()
             path.moveTo(cx + sx * L, cy)
@@ -217,13 +224,13 @@ def draw(c, t):
         p1 = np.array([(r1[0] + r1[2]) / 2, (r1[1] + r1[3]) / 2, 0.0])
         mid = (p0 + p1) / 2 + np.array([0, -40.0, -220.0])
         s = np.linspace(0, u, 48)[:, None]
-        q = (1 - s) ** 2 * p0 + 2 * (1 - s) * s * mid + s * s * p1
+        q = (1 - s) ** 2 * p0 + 2 * (1 - s) * s * mid + s * s * p1 + OFF
         pts, _ = cam.project(q)
         gfx.draw_poly(c, pts, gfx.stroke(P.SOFT, 0.85 * ca, 1.2))
-        e0, _ = cam.project(p0)
+        e0, _ = cam.project(p0 + OFF)
         gfx.dot(c, e0[0], e0[1], 2.4, P.INK, ca)
         if u >= 1:
-            e1, _ = cam.project(p1)
+            e1, _ = cam.project(p1 + OFF)
             gfx.dot(c, e1[0], e1[1], 2.4, P.INK, ca)
 
 

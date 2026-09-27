@@ -103,7 +103,7 @@ def _stage(i):
             S.append((_line(x, FY1 - 30, x, FY1 - 22), 1.0, 0.8, P.GRAY))
         for k in range(6):
             u = (k + 0.5) / 6
-            x = FX0 + 60 + u * (FX1 - 70 - FX0 - 60)
+            x = FX0 + 60 + u * ((FX1 - 10) - (FX0 + 60))
             y = OY - 10 - 150 * math.exp(-2.2 * u) * math.sin(u * 5.5 * math.pi)
             S.append((gfx.rect_pts(x - 3.5, y - 3.5, x + 3.5, y + 3.5), 1.2, 1.0, P.INK))
     elif i == 5:  # DOCUMENT — the plot becomes a figure on a page

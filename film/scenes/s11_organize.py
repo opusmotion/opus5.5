@@ -135,6 +135,8 @@ def _draw_frag(c, f, x, y, s, a, sy=1.0):
 ORDER = sorted(range(NF), key=lambda i: FR[i]["p"][1] / ((C.FOCAL + FR[i]["p"][2]) / C.FOCAL))
 SLOT = {i: k for k, i in enumerate(ORDER)}
 SLOT_Y = np.linspace(150, C.H - 150, NF)
+# organised widths follow one smooth envelope — the search space of scene 02, folded
+SLOT_W = 540.0 * np.sin(np.pi * (np.arange(NF) + 0.5) / NF) ** 1.4
 
 
 def zoom(t):
@@ -168,7 +170,7 @@ def draw(c, t):
             w = min(f["size"] * s, 560.0)
             x = E.lerp(q[0], C.CX, mv)
             y = E.lerp(q[1], SLOT_Y[k], mv)
-            w = E.lerp(w, min(f["size"], 420.0) * 0.8, mv) * (1 - ct)
+            w = E.lerp(w, SLOT_W[k], mv) * (1 - ct)
             aa = E.lerp(a, 0.9, mv)
             if fl < 1:
                 _draw_frag(c, f, q[0], q[1], s, a * (1 - fl), 1 - fl)

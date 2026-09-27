@@ -148,11 +148,11 @@ def draw(c, t):
     # interface frame + header
     if t >= UI0 - 0.05 and t < DIA0 + 0.5:
         u = E.traverse(E.seg(t, UI0 - 0.05, UI0 + 0.3))
-        out = E.smooth(E.seg(t, DIA0, DIA0 + 0.3))
+        out = E.smooth(E.seg(t, DIA0 - 0.02, DIA0 + 0.18))
         fr = gfx.rect_pts(*FR)
-        gfx.draw_poly(c, gfx.partial(fr, out, u), gfx.stroke(P.SOFT, 0.9, 1.3))
-        hy = gfx.partial(np.array([[FR[0], HEAD_Y], [FR[2], HEAD_Y]]), out, u)
-        gfx.draw_poly(c, hy, gfx.stroke(P.GRAY, 0.8, 1.1))
+        gfx.draw_poly(c, gfx.partial(fr, 0, u), gfx.stroke(P.SOFT, 0.9 * (1 - out), 1.3))
+        hy = gfx.partial(np.array([[FR[0], HEAD_Y], [FR[2], HEAD_Y]]), 0, u)
+        gfx.draw_poly(c, hy, gfx.stroke(P.GRAY, 0.8 * (1 - out), 1.1))
         # header details: three small squares (window affordances) → pure geometry
         for j in range(3):
             a = E.smooth(E.seg(t, UI0 + 0.2 + 0.04 * j, UI0 + 0.3 + 0.04 * j)) * (1 - out)
@@ -197,6 +197,20 @@ def draw(c, t):
         xs = [TOK[j] for j in range(len(TOK)) if TOK[j]["L"] == L]
         r, _ = token_rect(TOK.index(xs[-1]), t)
         gfx.line(c, r[2] + 4, r[1] - 8, r[2] + 4, r[3] + 8, gfx.stroke(P.INK, 1.0, 2.0))
+    # node 0 — where the navigation collapses
+    if DIA0 + 0.1 <= t:
+        k0 = E.settle(t - DIA0 - 0.1, 22.0)
+        n0 = NODES[0]
+        if t < CHART0:
+            hs = 7 * k0
+            c.drawRect(skia.Rect.MakeLTRB(n0[0] - hs, n0[1] - hs, n0[0] + hs, n0[1] + hs), gfx.stroke(P.SOFT, 0.95, 1.3))
+            gfx.dot(c, n0[0], n0[1], 2.0, P.INK, k0)
+        else:
+            v = E.settle(t - CHART0, 18.0)
+            p = np.array(n0) + (np.array([DATA_X[0], DATA_Y[0]]) - np.array(n0)) * v
+            hs = 7 + (4 - 7) * v
+            a = 1 - E.smooth(E.seg(t, REDUCE0, REDUCE0 + 0.3))
+            c.drawRect(skia.Rect.MakeLTRB(p[0] - hs, p[1] - hs, p[0] + hs, p[1] + hs), gfx.stroke(P.SOFT, 0.95 * a, 1.3))
     # diagram edges
     if t >= DIA0 + 0.15:
         ea = 1 - E.smooth(E.seg(t, CHART0, CHART0 + 0.2))
@@ -206,7 +220,7 @@ def draw(c, t):
             s = np.linspace(0, 1, 40)[:, None]
             p0, p1, p2, p3 = np.array([x0 + 8, y0]), np.array([(x0 + x1) / 2, y0]), np.array([(x0 + x1) / 2, y1]), np.array([x1 - 8, y1])
             q = (1 - s) ** 3 * p0 + 3 * (1 - s) ** 2 * s * p1 + 3 * (1 - s) * s * s * p2 + s ** 3 * p3
-            gfx.draw_poly(c, gfx.partial(q, 0, u), gfx.stroke(P.GRAY, 0.9 * ea, 1.2))
+            gfx.draw_poly(c, gfx.partial(q, 0, u), gfx.stroke(P.SOFT, 0.9 * ea, 1.3))
     # chart: axes from the divider and header rule, extra data points, curve
     if t >= CHART0 - 0.1:
         u = E.settle(t - CHART0 + 0.1, 14.0)
@@ -219,7 +233,7 @@ def draw(c, t):
             xx = AX0 + k * (AX1 - AX0) / 7
             gfx.line(c, xx, AY0, xx, AY0 + 7, gfx.stroke(P.GRAY, tk, 1.1))
         for j, (x, y) in enumerate(zip(DATA_X, DATA_Y)):
-            if j in NODE_TO_DATA[1:]:
+            if j in NODE_TO_DATA:
                 continue
             a = E.smooth(E.seg(t, CHART0 + 0.12 + 0.03 * j, CHART0 + 0.2 + 0.03 * j)) * (1 - out)
             c.drawRect(skia.Rect.MakeLTRB(float(x - 4), float(y - 4), float(x + 4), float(y + 4)), gfx.stroke(P.SOFT, a, 1.3))

@@ -49,8 +49,8 @@ RESOLVE = bt(4, 2.0)
 LABEL = bt(4, 2.3)
 ZOOM0, ZOOM1 = bt(4, 3.15), bt(5, 0.0)
 
-NL = 170
-Y_TOP, Y_BOT = 120.0, 960.0
+NL = 150
+Y_TOP, Y_BOT = 96.0, 984.0
 
 
 def _lines():
@@ -75,9 +75,12 @@ def camera(t):
     return Cam2(cx, cy, z) if z > 1.0001 else Cam2()
 
 
+ZMAX = 110.0
+
+
 def zoom_state(t):
     u = E.accel(E.seg(t, ZOOM0, ZOOM1))
-    return E.expi(1.0, 40.0, u), E.smooth(E.seg(t, ZOOM0, ZOOM1 - 0.1))
+    return E.expi(1.0, ZMAX, u), E.smooth(E.seg(t, ZOOM0, ZOOM1 - 0.1))
 
 
 def dot_screen(t):
@@ -115,7 +118,8 @@ def draw(c, t):
             if m.sum() < 2:
                 continue
             pts = np.stack([XS[m], y[m]], -1)
-            a = (0.36 + 0.3 * conv) * (1 - fade_lines)
+            edge = max(0.0, 1.0 - ((yi - C.CY) / 450.0) ** 6)  # soft vertical falloff: a field, not a slab
+            a = (0.30 + 0.22 * conv) * (1 - fade_lines) * edge
             c.drawPath(gfx.poly(pts), gfx.stroke(P.SOFT, a, 1.0))
             if head < C.W:
                 gfx.dot(c, pts[-1][0], pts[-1][1], 1.4, P.INK, 0.8 * (1 - fade_lines))
@@ -126,7 +130,12 @@ def draw(c, t):
     # resolve
     f = E.reveal(E.seg(t, RESOLVE, RESOLVE + 0.16))
     if f > 0:
-        c.drawPath(NUM_PATH, gfx.fill(P.INK, f))
+        # during the push the digits turn to outlines: no white flash as they pass the lens
+        solid = 1.0 - E.smooth(E.seg(z, 2.0, 3.6))
+        if solid > 0:
+            c.drawPath(NUM_PATH, gfx.fill(P.INK, f * solid))
+        if solid < 1:
+            c.drawPath(NUM_PATH, gfx.stroke(P.INK, f * (1 - solid) * (1 - E.smooth(E.seg(z, 30, 80))), 1.6 / z))
         pa = E.smooth(E.seg(t, RESOLVE + 0.12, RESOLVE + 0.35))
         typo.draw(c, "%", PX, PCT_BASE, KEY, PCT_SIZE, P.SOFT, pa)
         la = E.smooth(E.seg(t, LABEL, LABEL + 0.25)) * (1 - E.smooth(E.seg(t, ZOOM0, ZOOM0 + 0.15)))
@@ -134,9 +143,12 @@ def draw(c, t):
     c.restore()
     # decimal point: drawn in screen space; it becomes the origin of the next scene
     if f > 0:
-        r = DOT_R * min(z, 1.0 + 0.0 * z)
-        r = E.lerp(DOT_R, 5.0, E.smooth(E.seg(t, ZOOM0 + 0.05, ZOOM1 - 0.05)))
-        gfx.dot(c, sx, sy, r, P.INK, f)
+        # the decimal point grows with the push and opens: inside it is the next world
+        r = DOT_R * z
+        fill_a = 1.0 - E.smooth(E.seg(r, 30.0, 110.0))
+        gfx.dot(c, sx, sy, r, P.INK, f * fill_a)
+        if fill_a < 1:
+            gfx.ring(c, sx, sy, r, P.INK, f * (1 - fill_a) * (1 - E.smooth(E.seg(r, 700, 1300))), 1.6)
 
 
 def events():

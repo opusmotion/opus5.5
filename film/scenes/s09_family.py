@@ -10,6 +10,7 @@ from .. import ease as E
 from .. import gfx, typo
 from .. import palette as P
 from ..timeline import bt
+from . import s01_question as S01
 from . import s08_time as S08
 
 T0, T1 = bt(8), bt(9) + 0.02
@@ -23,8 +24,8 @@ CURL0, CURL1 = bt(8, 0.1), bt(8, 1.0)
 LUNA0 = bt(8, 0.55)
 BEH0 = bt(8, 1.0)
 SYNC = bt(8, 3.0)
-MERGE0, MERGE1 = bt(8, 3.45), bt(8, 3.8)
-FLAT0, FLAT1 = bt(8, 3.7), bt(8, 3.95)
+MERGE0, MERGE1 = bt(8, 3.28), bt(8, 3.62)
+FLAT0, FLAT1 = bt(8, 3.66), bt(8, 3.92)
 STEP = C.BEAT / 4
 
 HUE = {"sol": P.SOL, "astra": P.ASTRA, "luna": P.LUNA}
@@ -38,22 +39,24 @@ def tint(name, t, base=P.INK):
     return P.mix(base, HUE[name], colour(t))
 
 
-def _curl(mid_from, L_from, mid_to, t, delay):
-    """A straight line of length L_from bending into a circle whose bottom is mid_to."""
+def _curl(x_left, y0, L_from, mid_to, t, delay):
+    """A timeline (left end fixed while it trims to one circumference) bending into a
+    circle whose lowest point is mid_to."""
     u = E.discover(E.seg(t, CURL0 + delay, CURL1 + delay))
-    L = E.lerp(L_from, LC, E.smooth(E.seg(t, CURL0 + delay - 0.1, CURL0 + delay + 0.25)))
+    L = E.lerp(L_from, LC, E.smooth(E.seg(t, CURL0 + delay - 0.15, CURL0 + delay + 0.2)))
     k = u / R
     s = np.linspace(-L / 2, L / 2, 180)
     if k < 1e-6:
         x, y = s, np.zeros_like(s)
     else:
         x, y = np.sin(k * s) / k, -(1 - np.cos(k * s)) / k
-    mid = mid_from + (mid_to - mid_from) * E.settle(t - CURL0 - delay, 9.0)
+    mid_from = np.array([x_left + L / 2, y0])
+    mid = mid_from + (mid_to - mid_from) * E.settle(t - CURL0 - delay + 0.05, 9.0)
     return np.stack([mid[0] + x, mid[1] + y], -1), u
 
 
 def merge(t):
-    return E.settle(t - MERGE0, 16.0) if t >= MERGE0 else 0.0
+    return E.settle(t - MERGE0, 21.0) if t >= MERGE0 else 0.0
 
 
 def centre(name, t):
@@ -73,22 +76,21 @@ def _circ(c, name, t, r, paint):
         c.drawCircle(float(ctr[0]), float(ctr[1]), float(r), paint)
     else:
         a = np.linspace(0, 2 * math.pi, 120)
-        pts = np.stack([ctr[0] + r * np.cos(a) * max(fx, 0.0), ctr[1] + r * np.sin(a)], -1)
+        ry = E.lerp(r, S01.CUR_H / 2, E.reveal(E.seg(t, FLAT0 + 0.12, bt(9))))  # edge-on → the cursor
+        pts = np.stack([ctr[0] + r * np.cos(a) * max(fx, 0.0), ctr[1] + ry * np.sin(a)], -1)
         gfx.draw_poly(c, pts, paint, closed=True)
 
 
 def draw(c, t):
     inner = 1.0 - E.smooth(E.seg(t, MERGE0 - 0.25, MERGE0 + 0.05))
     # orbits: before the curl completes, draw the bending lines
-    if t < CURL1 + 0.3:
-        ast_mid = np.array([S08.XL + 20 * S08.PXM, S08.AST_Y])
-        sol_mid = np.array([S08.XL + 37.5 * S08.PXM, S08.SOL_Y])
-        for name, mid, L, d in (("sol", sol_mid, 75 * S08.PXM, 0.0), ("astra", ast_mid, 40 * S08.PXM, 0.08)):
-            pts, u = _curl(mid, L, CEN[name] + np.array([0, R]), t, d)
+    if t < CURL1 + 0.34:
+        for name, y0, L, d in (("sol", S08.SOL_Y, 75 * S08.PXM, 0.0), ("astra", S08.AST_Y, 40 * S08.PXM, 0.2)):
+            pts, u = _curl(S08.XL, y0, L, CEN[name] + np.array([0, R]), t, d)
             if u < 0.999:
                 col = P.mix(P.GRAY if name == "sol" else P.INK, P.INK, u)
                 gfx.draw_poly(c, pts, gfx.stroke(col, 1.0, 1.6))
-    ready = t >= CURL1 + 0.12
+    ready = t >= CURL1 + 0.32
     stroke_w = 1.6
     if ready:
         for name in ("sol", "astra"):
@@ -122,8 +124,8 @@ def draw(c, t):
     rng = np.random.default_rng(C.SEED + 9)
     n = 48
     ra = rng.uniform(0, 2 * math.pi, n)
-    rr = rng.uniform(0.25, 1.15, n)
-    rl = rng.uniform(0.04, 0.2, n)
+    rr = rng.uniform(0.5, 1.05, n)
+    rl = rng.uniform(0.05, 0.16, n)
     rt = rng.uniform(-1.2, 1.2, n)
     steps = math.floor((t - SYNC) / STEP + 1e-6)
     frac = (t - SYNC) / STEP - steps

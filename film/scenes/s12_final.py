@@ -15,7 +15,7 @@ KEYT = bt(11)  # 27.5 — the final keystroke
 CLOSE0 = KEYT + 0.16
 BRAND0, BRAND1 = bt(11, 1.4), bt(11, 2.3)
 
-SIZE = 58.0
+SIZE = 62.0
 KEY = "dlight"
 LEFT = "From answer"
 RIGHT = "to action."

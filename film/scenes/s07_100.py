@@ -15,10 +15,10 @@ from . import s06_98 as S06
 
 T0, T1 = bt(6) - 0.05, bt(7) + 0.3
 
-NXC, NYC, CELL = 44, 20, 36.0
+NXC, NYC, CELL = 44, 14, 36.0
 MX = (C.W - NXC * CELL) / 2
 MY = (C.H - NYC * CELL) / 2
-ROW = 14
+ROW = 11
 BASE_Y = MY + (ROW + 0.5) * CELL
 
 QUANT0 = bt(6, 0.0)
@@ -58,7 +58,7 @@ def _maze():
         seen[nx, ny] = True
         stack.append((nx, ny))
     # open a few extra passages → loops exist
-    for _ in range(int(NXC * NYC * 0.06)):
+    for _ in range(int(NXC * NYC * 0.24)):
         x, y = int(rng.integers(0, NXC - 1)), int(rng.integers(0, NYC - 1))
         if rng.random() < 0.5:
             right[x, y] = False
@@ -149,8 +149,28 @@ def _walls():
 
 
 WALLS = _walls()
-_wc = (WALLS[:, :2] + WALLS[:, 2:]) / 2
-WALL_DELAY = np.linalg.norm(_wc - np.array([C.CX, C.CY]), axis=1) / 1100.0
+
+
+def _wall_dist():
+    """A wall becomes visible when the search first touches a cell next to it."""
+    out = []
+    for (x0, y0, x1, y1) in WALLS:
+        mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+        cells = []
+        if abs(x0 - x1) < 1e-6:  # vertical wall between two columns
+            gx = int(round((mx - MX) / CELL))
+            gy = int((my - MY) // CELL)
+            cells = [(gx - 1, gy), (gx, gy)]
+        else:
+            gx = int((mx - MX) // CELL)
+            gy = int(round((my - MY) / CELL))
+            cells = [(gx, gy - 1), (gx, gy)]
+        ds = [DIST[c] for c in cells if 0 <= c[0] < NXC and 0 <= c[1] < NYC and DIST[c] >= 0]
+        out.append(min(ds) if ds else 1e9)
+    return np.array(out, float)
+
+
+WALL_D = _wall_dist()
 
 SIZE = 440.0
 KEY = "dlight"
@@ -196,24 +216,30 @@ def draw(c, t):
     if t < QUANT0:
         return
     gone = E.smooth(E.seg(t, TAUT0, TAUT0 + 0.25))
-    # walls
     if gone < 1:
-        wa = np.clip((t - WALLS0 - WALL_DELAY * (WALLS1 - WALLS0)) / 0.12, 0, 1)
-        pw = gfx.stroke(P.GRAY, 1.0, 1.3, cap="square")
+        # the rules exist before they are known: a lattice of points
+        la = E.smooth(E.seg(t, WALLS0, WALLS1)) * (1 - gone)
+        pd = gfx.fill(P.GRAY, 0.55 * la)
+        for gx in range(NXC + 1):
+            for gy in range(NYC + 1):
+                c.drawRect(skia.Rect.MakeXYWH(MX + gx * CELL - 0.9, MY + gy * CELL - 0.9, 1.8, 1.8), pd)
+        # constraints appear where the search touches them
+        d = (t - BFS0) * RATE if t >= BFS0 else -1.0
+        grow = np.clip((d - WALL_D) / 1.6, 0, 1)
+        dimw = E.smooth(E.seg(t, FOUND, FOUND + 0.35))
         path = skia.Path()
-        for (x0, y0, x1, y1), a in zip(WALLS, wa):
+        for (x0, y0, x1, y1), a in zip(WALLS, grow):
             if a <= 0:
                 continue
             mx, my = (x0 + x1) / 2, (y0 + y1) / 2
             path.moveTo(mx + (x0 - mx) * a, my + (y0 - my) * a)
             path.lineTo(mx + (x1 - mx) * a, my + (y1 - my) * a)
-        pw.setAlphaf(0.85 * (1 - gone))
-        c.drawPath(path, pw)
+        c.drawPath(path, gfx.stroke(P.mix(P.SOFT, P.GRAY, dimw), 0.8 * (1 - gone), 1.2, cap="square"))
     # exploration (BFS frontier)
     if t >= BFS0 and gone < 1:
         d = min((t - BFS0) * RATE, DEXIT + 0.0)
         dim = E.smooth(E.seg(t, FOUND, FOUND + 0.3))
-        pe = gfx.stroke(P.mix(P.SOFT, P.GRAPHITE, dim), 0.8 * (1 - gone), 1.1)
+        pe = gfx.stroke(P.mix(P.INK, P.GRAY, dim), 0.75 * (1 - gone), 1.2)
         path = skia.Path()
         heads = []
         for ch, pa in PAR.items():
